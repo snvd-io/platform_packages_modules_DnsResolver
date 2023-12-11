@@ -642,11 +642,12 @@ TEST_P(TransportParameterizedTest, BlockDnsQuery_FlaggedOff) {
 
         if (testParamHasDoh()) {
             EXPECT_NO_FAILURE(expectQueries(0 /* dns */, 0 /* dot */, 2 /* doh */));
-            dot.clearQueries();
+            doh.clearQueries();
         } else {
             EXPECT_NO_FAILURE(expectQueries(0 /* dns */, 2 /* dot */, 0 /* doh */));
-            doh.clearQueries();
+            dot.clearQueries();
         }
+        flushCache();
     }
 }
 
