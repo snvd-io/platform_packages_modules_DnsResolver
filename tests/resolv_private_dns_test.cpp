@@ -575,14 +575,14 @@ TEST_P(TransportParameterizedTest, BlockDnsQuery) {
             // DataSaver information is only meaningful after V.
             // TODO: Add 'else' to check that DNS queries are not blocked before V.
             if (android::modules::sdklevel::IsAtLeastV()) {
-                expectQueriesAreBlocked();
+                EXPECT_NO_FAILURE(expectQueriesAreBlocked());
             }
         } else {
             // Block network access by setting UID firewall rules.
             ScopeBlockedUIDRule scopeBlockUidRule(mDnsClient.netdService(), TEST_UID);
-            expectQueriesAreBlocked();
+            EXPECT_NO_FAILURE(expectQueriesAreBlocked());
         }
-        expectQueries(0 /* dns */, 0 /* dot */, 0 /* doh */);
+        EXPECT_NO_FAILURE(expectQueries(0 /* dns */, 0 /* dot */, 0 /* doh */));
     }
 }
 
