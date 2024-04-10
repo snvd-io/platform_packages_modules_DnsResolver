@@ -77,11 +77,7 @@ void _resolv_cache_query_failed(unsigned netid, std::span<const uint8_t> query, 
 std::vector<std::string> getCustomizedTableByName(const size_t netid, const char* hostname);
 
 // Sets name servers for a given network.
-// TODO: Pass all of ResolverParamsParcel and remove the res_params argument.
-int resolv_set_nameservers(unsigned netid, const std::vector<std::string>& servers,
-                           const std::vector<std::string>& domains, const res_params& params,
-                           std::optional<aidl::android::net::ResolverOptionsParcel> resolverOptions,
-                           const std::vector<int32_t>& transportTypes = {}, bool metered = false);
+int resolv_set_nameservers(const aidl::android::net::ResolverParamsParcel& params);
 
 // Sets options for a given network.
 int resolv_set_options(unsigned netid, const aidl::android::net::ResolverOptionsParcel& options);
