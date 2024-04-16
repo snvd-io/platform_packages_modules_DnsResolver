@@ -76,6 +76,9 @@ void _resolv_cache_query_failed(unsigned netid, std::span<const uint8_t> query, 
 // Get a customized table for a given network.
 std::vector<std::string> getCustomizedTableByName(const size_t netid, const char* hostname);
 
+// Return the names of the interfaces used by a given network.
+std::vector<std::string> resolv_get_interface_names(int netid);
+
 // Sets name servers for a given network.
 int resolv_set_nameservers(const aidl::android::net::ResolverParamsParcel& params);
 
