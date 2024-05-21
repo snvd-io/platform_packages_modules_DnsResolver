@@ -1067,6 +1067,7 @@ struct NetConfig {
     bool enforceDnsUid = false;
     std::vector<int32_t> transportTypes;
     bool metered = false;
+    std::vector<std::string> interfaceNames;
 };
 
 /* gets cache associated with a network, or NULL if none exists */
@@ -1641,6 +1642,14 @@ std::vector<std::string> getCustomizedTableByName(const size_t netid, const char
     return result;
 }
 
+std::vector<std::string> resolv_get_interface_names(int netid) {
+    std::lock_guard guard(cache_mutex);
+
+    NetConfig* netconfig = find_netconfig_locked(netid);
+    if (netconfig != nullptr) return netconfig->interfaceNames;
+    return {};
+}
+
 int resolv_set_nameservers(const ResolverParamsParcel& params) {
     const unsigned netid = params.netId;
     std::vector<std::string> nameservers = filter_nameservers(params.servers);
@@ -1717,9 +1726,12 @@ int resolv_set_nameservers(const ResolverParamsParcel& params) {
     }
     netconfig->transportTypes = std::move(params.transportTypes);
     netconfig->metered = params.meteredNetwork;
+    netconfig->interfaceNames = std::move(params.interfaceNames);
+
     if (params.resolverOptions.has_value()) {
         return netconfig->setOptions(params.resolverOptions.value());
     }
+
     return 0;
 }
 
