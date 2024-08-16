@@ -664,16 +664,18 @@ base::Result<PrivateDnsConfiguration::DohIdentity> PrivateDnsConfiguration::make
         };
     }
 
-    // 2. Look up `mAvailableDoHProviders`.
-    for (const auto& entry : mAvailableDoHProviders) {
-        const auto& dohId = entry.getDohIdentity(servers, name);
-        if (!dohId.ok()) continue;
+    // 2. If DDR is not supported/enabled (dohParams unset), look up `mAvailableDoHProviders`.
+    if (!dohParams) {
+        for (const auto& entry : mAvailableDoHProviders) {
+            const auto& dohId = entry.getDohIdentity(servers, name);
+            if (!dohId.ok()) continue;
 
-        // Since the DnsResolver is expected to be configured by the system server, add the
-        // restriction to prevent ResolverTestProvider from being used other than testing.
-        if (entry.requireRootPermission && AIBinder_getCallingUid() != AID_ROOT) continue;
+            // Since the DnsResolver is expected to be configured by the system server, add the
+            // restriction to prevent ResolverTestProvider from being used other than testing.
+            if (entry.requireRootPermission && AIBinder_getCallingUid() != AID_ROOT) continue;
 
-        return dohId;
+            return dohId;
+        }
     }
 
     return Errorf("Cannot make a DohIdentity from current DNS configuration");
