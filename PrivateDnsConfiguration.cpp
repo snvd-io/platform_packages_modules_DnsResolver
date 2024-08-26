@@ -606,14 +606,14 @@ int PrivateDnsConfiguration::setDoh(int32_t netId, uint32_t mark,
     // Sort the input servers to prefer IPv6.
     const std::vector<std::string> sortedServers = sortServers(servers);
 
-    initDohLocked();
-
     const auto& doh = makeDohIdentity(sortedServers, name, dohParams);
     if (!doh.ok()) {
         LOG(INFO) << __func__ << ": No suitable DoH server found";
         clearDoh(netId);
         return 0;
     }
+
+    initDohLocked();
 
     auto it = mDohTracker.find(netId);
     // Skip if the same server already exists and its status == success.
