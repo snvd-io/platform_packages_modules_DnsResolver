@@ -115,7 +115,8 @@ PrivateDnsModes convertEnumType(PrivateDnsMode mode) {
 int PrivateDnsConfiguration::set(int32_t netId, uint32_t mark,
                                  const std::vector<std::string>& unencryptedServers,
                                  const std::vector<std::string>& encryptedServers,
-                                 const std::string& name, const std::string& caCert) {
+                                 const std::string& name, const std::string& caCert,
+                                 const std::optional<DohParamsParcel> dohParams) {
     LOG(DEBUG) << "PrivateDnsConfiguration::set(" << netId << ", 0x" << std::hex << mark << std::dec
                << ", " << encryptedServers.size() << ", " << name << ")";
 
@@ -142,7 +143,7 @@ int PrivateDnsConfiguration::set(int32_t netId, uint32_t mark,
         return n;
     }
 
-    return setDoh(netId, mark, encryptedServers, name, caCert);
+    return setDoh(netId, mark, encryptedServers, name, caCert, dohParams);
 }
 
 int PrivateDnsConfiguration::setDot(int32_t netId, uint32_t mark,
@@ -594,7 +595,8 @@ void PrivateDnsConfiguration::initDohLocked() {
 
 int PrivateDnsConfiguration::setDoh(int32_t netId, uint32_t mark,
                                     const std::vector<std::string>& servers,
-                                    const std::string& name, const std::string& caCert) {
+                                    const std::string& name, const std::string& caCert,
+                                    const std::optional<DohParamsParcel> dohParams) {
     LOG(DEBUG) << "PrivateDnsConfiguration::setDoh(" << netId << ", 0x" << std::hex << mark
                << std::dec << ", " << servers.size() << ", " << name << ")";
     if (servers.empty()) {
@@ -610,7 +612,7 @@ int PrivateDnsConfiguration::setDoh(int32_t netId, uint32_t mark,
 
     initDohLocked();
 
-    const auto& doh = makeDohIdentity(sortedServers, name);
+    const auto& doh = makeDohIdentity(sortedServers, name, dohParams);
     if (!doh.ok()) {
         LOG(INFO) << __func__ << ": No suitable DoH server found";
         clearDoh(netId);
@@ -649,7 +651,24 @@ void PrivateDnsConfiguration::clearDoh(unsigned netId) {
 }
 
 base::Result<PrivateDnsConfiguration::DohIdentity> PrivateDnsConfiguration::makeDohIdentity(
-        const std::vector<std::string>& servers, const std::string& name) const {
+        const std::vector<std::string>& servers, const std::string& name,
+        const std::optional<DohParamsParcel> dohParams) const {
+    // 1. Use the DoH servers discovered from DDR.
+    // TODO(b/240259333): check whether dohPath is empty instead of whether dohPath equals to
+    // "/dns-query{?dns}".
+    if (dohParams && !dohParams->ips.empty() && !dohParams->name.empty() &&
+        dohParams->dohpath == "/dns-query{?dns}") {
+        // Sort the servers to prefer IPv6.
+        const std::vector<std::string> sortedServers = sortServers(dohParams->ips);
+        return DohIdentity{
+                .httpsTemplate = fmt::format("https://{}/dns-query", dohParams->name),
+                .ipAddr = sortedServers[0],
+                .host = dohParams->name,
+                .status = Validation::in_process,
+        };
+    }
+
+    // 2. Look up `mAvailableDoHProviders`.
     for (const auto& entry : mAvailableDoHProviders) {
         const auto& dohId = entry.getDohIdentity(servers, name);
         if (!dohId.ok()) continue;
@@ -660,6 +679,7 @@ base::Result<PrivateDnsConfiguration::DohIdentity> PrivateDnsConfiguration::make
 
         return dohId;
     }
+
     return Errorf("Cannot make a DohIdentity from current DNS configuration");
 }
 
