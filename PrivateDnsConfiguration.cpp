@@ -599,10 +599,6 @@ int PrivateDnsConfiguration::setDoh(int32_t netId, uint32_t mark,
                                     const std::optional<DohParamsParcel> dohParams) {
     LOG(DEBUG) << "PrivateDnsConfiguration::setDoh(" << netId << ", 0x" << std::hex << mark
                << std::dec << ", " << servers.size() << ", " << name << ")";
-    if (servers.empty()) {
-        clearDoh(netId);
-        return 0;
-    }
 
     const NetworkType networkType = resolv_get_network_types_for_net(netId);
     const PrivateDnsStatus status = getStatusLocked(netId);
