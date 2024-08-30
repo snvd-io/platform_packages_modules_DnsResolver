@@ -221,7 +221,7 @@ PrivateDnsStatus PrivateDnsConfiguration::getStatusLocked(unsigned netId) const 
     auto it = mDohTracker.find(netId);
     if (it != mDohTracker.end()) {
         status.dohServersMap.emplace(IPSockAddr::toIPSockAddr(it->second.ipAddr, kDohPort),
-                                     it->second.status);
+                                     DohServerInfo(it->second.httpsTemplate, it->second.status));
     }
 
     return status;
@@ -272,7 +272,7 @@ NetworkDnsServerSupportReported PrivateDnsConfiguration::getStatusForMetrics(uns
             bool validated = std::any_of(status.dohServersMap.begin(), status.dohServersMap.end(),
                                          [&target](const auto& entry) {
                                              return entry.first == target &&
-                                                    entry.second == Validation::success;
+                                                    entry.second.status == Validation::success;
                                          });
             Server* server = event.mutable_servers()->add_server();
             server->set_protocol(PROTO_DOH);
