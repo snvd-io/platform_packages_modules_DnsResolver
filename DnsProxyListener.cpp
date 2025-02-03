@@ -15,6 +15,7 @@
  */
 
 #include "DnsProxyListener.h"
+#include "BlocklistManager.h"
 
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -723,6 +724,7 @@ bool isUidNetworkingBlocked(uid_t uid, unsigned netId) {
 }  // namespace
 
 DnsProxyListener::DnsProxyListener() : FrameworkListener(SOCKET_NAME) {
+    LOG(ERROR) << __func__ << " seeting up listen taieb taieb taieb  " ;
     mGetAddrInfoCmd = std::make_unique<GetAddrInfoCmd>();
     registerCmd(mGetAddrInfoCmd.get());
 
@@ -739,6 +741,14 @@ DnsProxyListener::DnsProxyListener() : FrameworkListener(SOCKET_NAME) {
     registerCmd(mGetDnsNetIdCommand.get());
 
     ADnsHelper_isUidNetworkingBlocked = resolveIsUidNetworkingBlockedFn();
+
+    LOG(INFO) << "Starting  blocklist constructor ";
+    if (!BlocklistManager::getInstance().loadBlocklist("/etc/blocklist.txt")) {
+        LOG(ERROR) << "Failed to load blocklist";
+    } else {
+        LOG(INFO) << "Blocklist successfully loaded";
+      }
+
 }
 
 void DnsProxyListener::Handler::spawn() {
@@ -907,6 +917,18 @@ void DnsProxyListener::GetAddrInfoHandler::doDns64Synthesis(int32_t* rv, addrinf
 void DnsProxyListener::GetAddrInfoHandler::run() {
     LOG(INFO) << "GetAddrInfoHandler::run: {" << mNetContext.toString() << "}";
 
+
+    static std::once_flag blocklist_loaded;
+    std::call_once(blocklist_loaded, [](){
+        LOG(ERROR) << "++++++ Loading blocklist from GetAddrInfoHandler::run()  ++++++";
+        if (!BlocklistManager::getInstance().loadBlocklist("/etc/blockedlist")) {
+            LOG(ERROR) << "Failed to load blocklist";
+        } else {
+            LOG(INFO) << "Blocklist successfully loaded";
+        }
+    });
+
+
     addrinfo* result = nullptr;
     Stopwatch s;
     maybeFixupNetContext(&mNetContext, mClient->getPid());
@@ -921,7 +943,11 @@ void DnsProxyListener::GetAddrInfoHandler::run() {
     } else if (startQueryLimiter(uid)) {
         const char* host = mHost.starts_with('^') ? nullptr : mHost.c_str();
         const char* service = mService.starts_with('^') ? nullptr : mService.c_str();
-        if (evaluate_domain_name(mNetContext, host)) {
+        LOG(INFO) << "Before the check blocked domain - "<< host ;
+	if (host && BlocklistManager::getInstance().isBlocked(host)) {
+        LOG(INFO) << "GetAddrInfoHandler::run: Blocked domain - " << host;
+        rv = EAI_FAIL;
+    } else if (evaluate_domain_name(mNetContext, host)) {
             rv = resolv_getaddrinfo(host, service, mHints.get(), &mNetContext, &result, &event);
             doDns64Synthesis(&rv, &result, &event);
         } else {
@@ -1093,6 +1119,17 @@ DnsProxyListener::ResNSendHandler::ResNSendHandler(SocketClient* c, std::string 
 void DnsProxyListener::ResNSendHandler::run() {
     LOG(INFO) << "ResNSendHandler::run: " << mFlags << " / {" << mNetContext.toString() << "}";
 
+        // Ensure blocklist is loaded only once
+    static std::once_flag blocklist_loaded;
+    std::call_once(blocklist_loaded, [](){
+    LOG(ERROR) << "++++++ Loading blocklist from GetAddrInfoHandler::run()  ++++++";
+        if (!BlocklistManager::getInstance().loadBlocklist("/etc/blockedlist")) {
+            LOG(ERROR) << "Failed to load blocklist";
+        } else {
+            LOG(INFO) << "Blocklist successfully loaded";
+	   }
+    });
+    
     Stopwatch s;
     maybeFixupNetContext(&mNetContext, mClient->getPid());
 
@@ -1132,7 +1169,10 @@ void DnsProxyListener::ResNSendHandler::run() {
         LOG(INFO) << "ResNSendHandler::run: network access blocked";
         ansLen = -ECONNREFUSED;
     } else if (startQueryLimiter(uid)) {
-        if (evaluate_domain_name(mNetContext, rr_name.c_str())) {
+        if (BlocklistManager::getInstance().isBlocked(rr_name)) {
+        LOG(INFO) << "ResNSendHandler::run: Blocked domain - " << rr_name;
+        ansLen = -ECONNREFUSED;  
+    } else if (evaluate_domain_name(mNetContext, rr_name.c_str())) {
             ansLen = resolv_res_nsend(&mNetContext, std::span(msg.data(), msgLen), ansBuf, &rcode,
                                       static_cast<ResNsendFlags>(mFlags), &event);
         } else {
@@ -1323,6 +1363,17 @@ void DnsProxyListener::GetHostByNameHandler::doDns64Synthesis(int32_t* rv, hoste
 
 void DnsProxyListener::GetHostByNameHandler::run() {
     LOG(INFO) << "GetHostByNameHandler::run: {" << mNetContext.toString() << "}";
+    
+    static std::once_flag blocklist_loaded;
+    std::call_once(blocklist_loaded, [](){
+    LOG(ERROR) << "++++++ Loading blocklist from GetAddrInfoHandler::run()  ++++++";
+        if (!BlocklistManager::getInstance().loadBlocklist("/etc/blockedlist")) {
+            LOG(ERROR) << "Failed to load blocklist";
+        } else {
+            LOG(INFO) << "Blocklist successfully loaded";
+        }
+    });
+
     Stopwatch s;
     maybeFixupNetContext(&mNetContext, mClient->getPid());
     const uid_t uid = mClient->getUid();
@@ -1338,7 +1389,10 @@ void DnsProxyListener::GetHostByNameHandler::run() {
         rv = EAI_FAIL;
     } else if (startQueryLimiter(uid)) {
         const char* name = mName.starts_with('^') ? nullptr : mName.c_str();
-        if (evaluate_domain_name(mNetContext, name)) {
+        if (name && BlocklistManager::getInstance().isBlocked(name)) {
+            LOG(INFO) << "GetHostByNameHandler::run: Blocked domain - " << name;
+            rv = EAI_FAIL;
+    } else if (evaluate_domain_name(mNetContext, name)) {
             rv = resolv_gethostbyname(name, mAf, &hbuf, tmpbuf, sizeof tmpbuf, &mNetContext, &hp,
                                       &event);
             doDns64Synthesis(&rv, &hbuf, tmpbuf, sizeof tmpbuf, &hp, &event);

@@ -255,6 +255,7 @@ cc_library {
         "DnsProxyListener.cpp",
         "DnsQueryLog.cpp",
         "DnsResolver.cpp",
+	"BlocklistManager.cpp",
         "DnsResolverService.cpp",
         "DnsStats.cpp",
         "DnsTlsDispatcher.cpp",
